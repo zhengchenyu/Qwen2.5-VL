@@ -26,14 +26,37 @@ VIDEOCHATGPT = {
     "data_path": "PATH_TO_VIDEOCHATGPT_DATA",
 }
 
+VISUAL_WEB_INSTRUCT = {
+    "annotation_path": "/work/zhengchenyu/hf_cache/manual_download/VisualWebInstruct/mixed_conversation.jsonl",
+    "data_path": "/work/zhengchenyu/hf_cache/manual_download/VisualWebInstruct/images",
+}
+
+mllm_demo = {
+    "annotation_path": "/work/zhengchenyu/Qwen2.5-VL/qwen-vl-finetune/mllm_demo.json",
+    "data_path": "/work/zhengchenyu/hf_cache/manual_download/VisualWebInstruct/images",
+}
+
+identity = {
+    "annotation_path": "/work/zhengchenyu/Qwen2.5-VL/qwen-vl-finetune/identity.json",
+    "data_path": "/work/zhengchenyu/hf_cache/manual_download/VisualWebInstruct/images",
+}
+
+alpaca_en_demo = {
+    "annotation_path": "/work/zhengchenyu/Qwen2.5-VL/qwen-vl-finetune/alpaca_en_demo.json",
+    "data_path": "/work/zhengchenyu/hf_cache/manual_download/VisualWebInstruct/images",
+}
+
 data_dict = {
     "cambrian_737k": CAMBRIAN_737K,
     "cambrian_737k_pack": CAMBRIAN_737K_PACK,
     "mp_doc": MP_DOC,
     "clevr_mc": CLEVR_MC,
     "videochatgpt": VIDEOCHATGPT,
+    "VisualWebInstruct": VISUAL_WEB_INSTRUCT,
+    "alpaca_en_demo": alpaca_en_demo,
+    "identity": identity,
+    "mllm_demo": mllm_demo,
 }
-
 
 def parse_sampling_rate(dataset_name):
     match = re.search(r"%(\d+)$", dataset_name)

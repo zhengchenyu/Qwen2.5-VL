@@ -193,6 +193,7 @@ class LazySupervisedDataset(Dataset):
         self.data_args.image_processor.min_pixels = data_args.min_pixels
         self.data_args.image_processor.size["longest_edge"] = data_args.max_pixels
         self.data_args.image_processor.size["shortest_edge"] = data_args.min_pixels
+        self.cache_sample = None
 
     def __len__(self):
         return len(self.list_data_dict)
@@ -322,9 +323,9 @@ class LazySupervisedDataset(Dataset):
         return video_tensor, grid_thw, second_per_grid_ts
 
     def __getitem__(self, i) -> Dict[str, torch.Tensor]:
-        num_base_retries = 3
-        num_final_retries = 30
+        num_base_retries = 1            # local image, no need to retry
 
+        sample = None
         # try the current sample first
         for attempt_idx in range(num_base_retries):
             try:
@@ -333,28 +334,44 @@ class LazySupervisedDataset(Dataset):
             except Exception as e:
                 # sleep 1s in case it is a cloud disk issue
                 print(f"[Try #{attempt_idx}] Failed to fetch sample {i}. Exception:", e)
-                time.sleep(1)
+                # time.sleep(1)
 
-        # try other samples, in case it is file corruption issue
-        for attempt_idx in range(num_base_retries):
-            try:
-                next_index = min(i + 1, len(self.list_data_dict) - 1)
-                # sample_idx = random.choice(range(len(self)))
-                sample = self._get_item(next_index)
-                return sample
-            except Exception as e:
-                # no need to sleep
-                print(
-                    f"[Try other #{attempt_idx}] Failed to fetch sample {next_index}. Exception:",
-                    e,
-                )
-                pass
+        # Avoid the invalid sample issue, try to use the cached sample
+        if sample is None:
+            if self.cache_sample is None:
+                fake_idx = (i + 1) % (len(self.list_data_dict) - 1)
+                while self.cache_sample is None:
+                    try:
+                        self.cache_sample = self._get_item(fake_idx)
+                        fake_idx = (fake_idx + 1) % (len(self.list_data_dict) - 1)
+                    except Exception as e:
+                        print(f"Failed to fetch sample {i}. Exception:", e)
+            else:
+                sample = self.cache_sample
+        elif self.cache_sample is None:
+            self.cache_sample = sample
 
-        try:
-            sample = self._get_item(i)
-            return sample
-        except Exception as e:
-            raise e
+        return sample
+        # # try other samples, in case it is file corruption issue
+        # for attempt_idx in range(num_base_retries):
+        #     try:
+        #         next_index = min(i + 1, len(self.list_data_dict) - 1)
+        #         # sample_idx = random.choice(range(len(self)))
+        #         sample = self._get_item(next_index)
+        #         return sample
+        #     except Exception as e:
+        #         # no need to sleep
+        #         print(
+        #             f"[Try other #{attempt_idx}] Failed to fetch sample {next_index}. Exception:",
+        #             e,
+        #         )
+        #         pass
+        #
+        # try:
+        #     sample = self._get_item(i)
+        #     return sample
+        # except Exception as e:
+        #     raise e
 
     def _get_item(self, i) -> Dict[str, torch.Tensor]:
         sources = self.list_data_dict[i]
@@ -444,10 +461,9 @@ class LazySupervisedDataset(Dataset):
             second_per_grid_ts=second_per_grid_ts if second_per_grid_ts else None,
         )
         if "image" not in sources[0] and "video" not in sources[0]:
-            grid_thw_merged = None
             sources = copy.deepcopy([e["conversations"] for e in sources])
             data_dict = preprocess_qwen_2_visual(
-                sources, self.tokenizer, grid_thw=grid_thw_merged
+                sources, self.tokenizer, None, None
             )
             position_ids = (
                 torch.arange(0, data_dict["input_ids"].size(1))
@@ -565,6 +581,11 @@ class FlattenedDataCollatorForSupervisedDataset(DataCollatorForSupervisedDataset
     tokenizer: transformers.PreTrainedTokenizer
 
     def __call__(self, instances: Sequence[Dict]) -> Dict[str, torch.Tensor]:
+        for instance in instances:
+            if instance is None:
+                print(f"zcydebug: instance is None")
+            else:
+                print(f"zcydebug: instance is {instance.keys()}")
         input_ids, labels, position_ids, attention_mask = tuple(
             [instance[key] for instance in instances]
             for key in ("input_ids", "labels", "position_ids", "attention_mask")
